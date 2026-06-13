@@ -1,33 +1,98 @@
-# saferoad-ai-dashboard
+# SafeRoad AI — Инструкция по запуску
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Проект состоит из двух частей:
 
-## Built with v0
+- **Frontend** — Next.js приложение (карта, маршруты, аналитика)
+- **Backend** — Python (Flask), который загружает ML-модель `risk_model.pkl`
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+Необходимо запустить обе части.
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_k0L8Uu3cFKuFaLV4kjyxaFRIMlpI)
+---
 
-## Getting Started
+## Что нужно установить заранее
 
-First, run the development server:
+- **Node.js** 18+ — https://nodejs.org
+- **Python** 3.10+ — https://python.org
+- **Git** — https://git-scm.com
+
+---
+
+## 1. Скачать проект
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+git clone <ссылка-на-репозиторий>
+cd <папка-проекта>
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 2. Запустить Frontend (терминал №1)
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more, take a look at the following resources:
+Откроется на: **http://localhost:3000**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+---
+
+## 3. Запустить Backend (терминал №2)
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+Поместите свою модель сюда:
+
+```
+backend/models/risk_model.pkl
+```
+
+Запустите сервер:
+
+```bash
+python app.py
+```
+
+Откроется на: **http://localhost:5000**
+
+Проверка:
+
+```bash
+curl http://localhost:5000/api/health
+```
+
+Если в ответе `"modelLoaded": true` — модель загрузилась успешно.
+
+---
+
+## 4. Связать Frontend и Backend
+
+В корне проекта создайте файл **`.env.local`**:
+
+```
+BACKEND_URL=http://localhost:5000
+```
+
+Перезапустите frontend (`Ctrl+C`, затем снова `npm run dev`).
+
+---
+
+## 5. Проверить
+
+Откройте http://localhost:3000 — раздел **Route Planner**.
+Бейдж должен показывать **"Live backend"** (а не "Sample data").
+
+---
+
+## Возможные проблемы
+
+| Проблема | Решение |
+|---|---|
+| Бейдж показывает "Sample data" | Проверьте, что backend запущен и `BACKEND_URL` указан в `.env.local`, перезапустите frontend |
+| `modelLoaded: false` | Файл `risk_model.pkl` лежит не в `backend/models/` или назван иначе |
+| Порт 3000 / 5000 занят | Закройте другой процесс или смените порт |
+
+> Если backend выключен — приложение всё равно работает на встроенном движке (без реальной модели), демо не сломается.
