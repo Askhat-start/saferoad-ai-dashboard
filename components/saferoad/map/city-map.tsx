@@ -6,6 +6,7 @@ import {
   Polyline,
   TileLayer,
   Tooltip,
+  useMapEvents,
 } from 'react-leaflet'
 import {
   ALMATY_CENTER,
@@ -13,6 +14,7 @@ import {
   type LatLng,
   type Segment,
 } from '@/lib/city-data'
+import type { RouteLeg } from '@/lib/api'
 
 interface CityMapProps {
   segments: Segment[]
@@ -21,10 +23,23 @@ interface CityMapProps {
   showRoutes?: boolean
   fastestRoute?: LatLng[]
   saferoadRoute?: LatLng[]
-  start?: LatLng
-  end?: LatLng
+  /** colored legs returned from the live backend route */
+  routeLegs?: RouteLeg[]
+  start?: LatLng | null
+  end?: LatLng | null
   /** dim segments to focus on routes */
   dimSegments?: boolean
+  /** fired with [lat,lng] when the user clicks the map */
+  onMapClick?: (point: LatLng) => void
+}
+
+function ClickCapture({ onMapClick }: { onMapClick?: (p: LatLng) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick?.([e.latlng.lat, e.latlng.lng])
+    },
+  })
+  return null
 }
 
 export default function CityMap({
@@ -34,9 +49,11 @@ export default function CityMap({
   showRoutes = false,
   fastestRoute,
   saferoadRoute,
+  routeLegs,
   start,
   end,
   dimSegments = false,
+  onMapClick,
 }: CityMapProps) {
   return (
     <MapContainer
@@ -44,7 +61,7 @@ export default function CityMap({
       zoom={13}
       zoomControl
       className="h-full w-full"
-      style={{ background: '#0a0d15' }}
+      style={{ background: '#0a0d15', cursor: onMapClick ? 'crosshair' : '' }}
     >
       <TileLayer
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -52,6 +69,8 @@ export default function CityMap({
         subdomains="abcd"
         maxZoom={19}
       />
+
+      <ClickCapture onMapClick={onMapClick} />
 
       {segments.map((seg) => {
         const isSelected = seg.id === selectedId
@@ -80,6 +99,26 @@ export default function CityMap({
           </Polyline>
         )
       })}
+
+      {routeLegs?.map((leg, i) => (
+        <Polyline
+          key={`leg-${i}`}
+          positions={leg.positions}
+          pathOptions={{
+            color: leg.color,
+            weight: 7,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }}
+        >
+          <Tooltip sticky>
+            {leg.risk != null
+              ? `Risk ${Math.round(leg.risk)} · SafeRoad route`
+              : 'SafeRoad AI route'}
+          </Tooltip>
+        </Polyline>
+      ))}
 
       {showRoutes && fastestRoute && (
         <Polyline

@@ -6,7 +6,9 @@ import {
   Activity,
   Footprints,
   Lightbulb,
+  Loader2,
   MousePointerClick,
+  RadioTower,
   Ruler,
   ScanSearch,
   Sparkles,
@@ -14,12 +16,33 @@ import {
 } from 'lucide-react'
 import {
   RISK_COLORS,
+  RISK_LABELS,
   SEGMENTS,
   riskLevel,
   type Segment,
 } from '@/lib/city-data'
+import { predictRisk, type PredictRiskResult } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { Panel, PanelHeader, RiskPill } from '../primitives'
+import { BackendStatus } from '../backend-status'
+
+/** Build a feature dict from a segment to send to the /api/predict-risk model. */
+function segmentFeatures(segment: Segment): Record<string, unknown> {
+  const byKey = Object.fromEntries(
+    segment.factors.map((f) => [f.key, f.contribution]),
+  )
+  return {
+    id: segment.id,
+    name: segment.name,
+    district: segment.district,
+    lengthM: segment.lengthM,
+    dailyPedestrians: segment.dailyPedestrians,
+    accidents12mo: segment.accidents12mo,
+    riskScore: segment.riskScore,
+    ...byKey,
+  }
+}
 
 const CityMap = dynamic(() => import('../map/city-map'), {
   ssr: false,
@@ -43,6 +66,24 @@ export function ExplainableAI() {
   const [selectedId, setSelectedId] = useState<string>(sorted[0].id)
   const segment = SEGMENTS.find((s) => s.id === selectedId) as Segment
 
+  const [live, setLive] = useState<PredictRiskResult | null>(null)
+  const [scoring, setScoring] = useState(false)
+
+  function selectSegment(id: string) {
+    setSelectedId(id)
+    setLive(null)
+  }
+
+  async function handleLiveScore() {
+    setScoring(true)
+    try {
+      const res = await predictRisk(segmentFeatures(segment))
+      setLive(res)
+    } finally {
+      setScoring(false)
+    }
+  }
+
   // contribution in risk points
   const factorsWithPoints = [...segment.factors]
     .map((f) => ({
@@ -60,7 +101,7 @@ export function ExplainableAI() {
         <CityMap
           segments={SEGMENTS}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={selectSegment}
         />
         <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card/85 px-3.5 py-1.5 text-xs backdrop-blur-xl">
           <MousePointerClick className="size-3.5 text-primary" />
@@ -84,6 +125,13 @@ export function ExplainableAI() {
 
       {/* Inspector */}
       <div className="flex w-[420px] shrink-0 flex-col overflow-y-auto border-l border-border bg-card/30 p-4 backdrop-blur-xl">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Explainable AI
+          </span>
+          <BackendStatus />
+        </div>
+
         <Panel className="mb-3">
           <PanelHeader
             title="Segment Risk Analysis"
@@ -144,6 +192,65 @@ export function ExplainableAI() {
                   model confidence.
                 </p>
               </div>
+            </div>
+
+            {/* Live model re-score */}
+            <div className="mt-4 rounded-lg border border-border bg-secondary/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <RadioTower className="size-3.5 text-primary" />
+                  <span className="text-xs font-medium text-foreground">
+                    Live model score
+                  </span>
+                </div>
+                {live ? (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="font-mono text-sm font-semibold"
+                      style={{ color: RISK_COLORS[live.riskBand] }}
+                    >
+                      {Math.round(live.riskScore)}
+                    </span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        color: RISK_COLORS[live.riskBand],
+                        backgroundColor: `${RISK_COLORS[live.riskBand]}22`,
+                      }}
+                    >
+                      {RISK_LABELS[live.riskBand]}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">
+                    not scored
+                  </span>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="mt-2.5 w-full"
+                onClick={handleLiveScore}
+                disabled={scoring}
+              >
+                {scoring ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Scoring…
+                  </>
+                ) : (
+                  <>
+                    <RadioTower className="size-3.5" /> Re-score with /predict-risk
+                  </>
+                )}
+              </Button>
+              {live ? (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {live.source === 'backend'
+                    ? 'Returned by the live SafeRoad model.'
+                    : 'Backend offline — showing the stored score.'}
+                </p>
+              ) : null}
             </div>
           </div>
         </Panel>
@@ -228,7 +335,7 @@ export function ExplainableAI() {
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setSelectedId(s.id)}
+                onClick={() => selectSegment(s.id)}
                 className={cn(
                   'flex items-center justify-between rounded-md border px-3 py-2 text-left text-xs transition-colors',
                   s.id === selectedId
