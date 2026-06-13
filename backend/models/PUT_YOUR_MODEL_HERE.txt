@@ -1,0 +1,16 @@
+Drop your trained scikit-learn model in THIS folder as:
+
+    risk_model.pkl
+
+That is the exact path the backend loads (backend/models/risk_model.pkl).
+
+It must be a joblib-saved sklearn Pipeline that:
+  - accepts a pandas DataFrame with these columns, in this order:
+      speedLimit, lanes, crosswalk, trafficLight,
+      schoolNearby, busStopNearby, lighting, sidewalkQuality
+  - returns a continuous risk score (0-100) from .predict(X)
+
+After placing the file, (re)start the backend. On first run it builds and
+caches the Almaty graph (backend/cache/almaty_graph.pkl) using your model to
+score every road segment. Delete that cache file (or run
+`python -m src.graph_builder`) to force a rebuild after swapping the model.
